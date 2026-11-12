@@ -180,27 +180,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
               <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-slate-900">PayPal Developer Sandbox</span>
-                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px]">
-                  {state.integration.paypalSandbox ? 'Sandbox Live' : 'Simulated Sandbox'}
+                <span className="font-bold text-slate-900">
+                  {state.integration.paypalSandbox ? "PayPal Developer Sandbox: Connected" : "PayPal Developer Sandbox"}
+                </span>
+                <span className={`px-2 py-0.5 font-bold rounded text-[10px] ${
+                  state.integration.paypalSandbox ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"
+                }`}>
+                  {state.integration.paypalSandbox ? "Connected" : "Simulated Mode"}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500">
-                Simulated mode creates realistic PayPal invoices and webhooks without requiring active API keys.
+                {state.integration.paypalSandbox
+                  ? "Live sandbox Invoicing API v2 and webhook signature verification active."
+                  : "Simulated mode creates realistic PayPal invoices and webhooks without requiring active API keys."}
               </p>
             </div>
 
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
               <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-slate-900">AI Intelligence Engine</span>
-                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 font-bold rounded text-[10px]">
-                  {state.integration.openai ? state.integration.model : 'On-Device Policy Engine'}
+                <span className="font-bold text-slate-900">
+                  {state.integration.gemini ? "AI Engine: Gemini" : state.integration.openai ? "AI Engine: OpenAI" : "AI Engine: Policy Engine"}
+                </span>
+                <span className={`px-2 py-0.5 font-bold rounded text-[10px] ${
+                  state.integration.gemini || state.integration.openai ? "bg-indigo-100 text-indigo-800" : "bg-slate-200 text-slate-700"
+                }`}>
+                  {state.integration.model}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500">
-                {state.integration.openai
-                  ? 'Connected to OpenAI for live contextual message copywriting.'
-                  : 'Zero external API latency; running on-device payment diagnosis logic.'}
+                {state.integration.gemini
+                  ? "Connected to Google Gemini API for structured payment root-cause diagnosis."
+                  : state.integration.openai
+                  ? "Connected to OpenAI for live contextual message copywriting."
+                  : "Zero external API latency; running on-device deterministic payment diagnosis logic."}
               </p>
             </div>
           </div>

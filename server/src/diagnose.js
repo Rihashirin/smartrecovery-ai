@@ -1,5 +1,6 @@
 import { buildRecoveryMessage } from "./messages.js";
 import { narrateWithOpenAI } from "./openai.js";
+import { diagnoseWithGemini } from "./gemini.js";
 
 const money = (amount, currency = "USD") =>
   new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
@@ -180,19 +181,96 @@ export function composeDiagnosis(state, txn) {
     createdAt: new Date().toISOString(),
   };
   diagnosis.suggestedMessage = buildRecoveryMessage(customer, txn, diagnosis, state.settings.merchantName);
-  const score = { low: 28, medium: 56, high: 84 }[riskLevel];
-  customer.riskScore = Math.max(customer.riskScore || 0, score);
+  
+  // Make customer risk score vary realistically based on risk level and transaction history
+  const baseScore = { low: 18, medium: 46, high: 78 }[riskLevel];
+  const jitter = Math.round((txn.amount * 3) % 19);
+  customer.riskScore = Math.min(94, Math.max(12, baseScore + jitter));
+
   return diagnosis;
 }
 
 export async function buildDiagnosis(state, txn) {
+  const customer = state.customers.find((c) => c.id === txn.customerId);
+  const amountLabel = money(txn.amount, txn.currency);
+
+  // 1. Try Gemini API if configured
+  if (process.env.GEMINI_API_KEY && customer) {
+    const priors = priorFailureCount(state, customer.id, txn.id);
+    const geminiDx = await diagnoseWithGemini({
+      displayId: txn.displayId,
+      amount: txn.amount,
+      currency: txn.currency,
+      eventType: txn.eventType,
+      failureCode: txn.failureCode,
+      failureReason: txn.failureReason,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      customerSegment: customer.segment,
+      priorFailures: priors,
+      merchantName: state.settings.merchantName,
+    });
+
+    if (geminiDx) {
+      // Deterministic guardrail safety overrides on Gemini recommendations
+      let riskLevel = geminiDx.riskLevel;
+      let recommendedAction = geminiDx.recommendedAction;
+      let probability = geminiDx.recoveryProbability;
+
+      const facts = [
+        `PayPal event ${txn.eventType} was stored for ${txn.displayId}.`,
+        `Amount on the event is ${amountLabel}. Recovery actions are not allowed to change it.`,
+        ...(geminiDx.verifiedFacts || []),
+      ];
+
+      if (priors + 1 >= state.settings.repeatFailureThreshold && txn.status === "failed") {
+        facts.push(`${customer.name} has ${priors + 1} failures. Human review required.`);
+        riskLevel = "high";
+        recommendedAction = "escalate_human";
+        probability = Math.min(probability, 0.28);
+      }
+
+      if (txn.amount >= state.settings.highValueApprovalAmount && riskLevel !== "high") {
+        facts.push(`Amount is at or above the ${money(state.settings.highValueApprovalAmount)} high-value threshold.`);
+        riskLevel = "high";
+      }
+
+      const diagnosis = {
+        id: `dx_${txn.id}`,
+        transactionId: txn.id,
+        rootCause: geminiDx.rootCause,
+        explanation: geminiDx.explanation,
+        category: geminiDx.category,
+        categoryLabel: geminiDx.categoryLabel,
+        riskLevel,
+        recoveryProbability: probability,
+        recommendedAction,
+        uncertainty: geminiDx.uncertainty,
+        verifiedFacts: facts,
+        hypotheses: geminiDx.hypotheses.length ? geminiDx.hypotheses : ["Inferred funding source or issuer limitation."],
+        suggestedMessage: "",
+        model: geminiDx.model,
+        policyLocked: true,
+        createdAt: new Date().toISOString(),
+      };
+      diagnosis.suggestedMessage = buildRecoveryMessage(customer, txn, diagnosis, state.settings.merchantName);
+
+      const baseScore = { low: 18, medium: 46, high: 78 }[riskLevel];
+      const jitter = Math.round((txn.amount * 3) % 19);
+      customer.riskScore = Math.min(94, Math.max(12, baseScore + jitter));
+      return diagnosis;
+    }
+  }
+
+  // 2. Fall back to Deterministic Policy Engine
   const diagnosis = composeDiagnosis(state, txn);
   if (!diagnosis) return null;
-  const customer = state.customers.find((c) => c.id === txn.customerId);
   if (diagnosis.uncertainty === "high" || diagnosis.category === "compliance") return diagnosis;
+
+  // Optional OpenAI narrative if configured
   const narrative = await narrateWithOpenAI({
     merchantName: state.settings.merchantName,
-    amount: new Intl.NumberFormat("en-US", { style: "currency", currency: txn.currency }).format(txn.amount),
+    amount: amountLabel,
     facts: diagnosis.verifiedFacts,
     hypotheses: diagnosis.hypotheses,
     categoryLabel: diagnosis.categoryLabel,

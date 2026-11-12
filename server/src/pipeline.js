@@ -92,7 +92,7 @@ export async function openAction(state, txnIdOrTxn, diagnosis, actionType, optio
   const action = {
     id: uid("act"),
     transactionId: txn.id,
-    type: actionType,
+    type: decision.actionType || actionType,
     status: "pending",
     idempotencyKey: decision.idempotencyKey,
     requiresApproval: decision.requiresApproval,

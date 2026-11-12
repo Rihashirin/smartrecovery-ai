@@ -2,23 +2,35 @@ import { containsSensitive } from "./messages.js";
 
 export const ACTION_TYPES = [
   "generate_invoice",
+  "invoice",
   "send_recovery_message",
+  "recovery_message",
+  "message",
   "schedule_retry",
   "send_reminder",
+  "reminder",
   "escalate_human",
   "recommend_capture",
 ];
 
 const CHARGE_TYPES = new Set(["capture", "charge", "sale", "refund", "update_amount", "create_order"]);
 
-export function evaluateGuardrail(state, txn, diagnosis, actionType, extras = {}) {
+export function normalizeActionType(type) {
+  if (type === "invoice") return "generate_invoice";
+  if (type === "message" || type === "recovery_message") return "send_recovery_message";
+  if (type === "reminder") return "send_reminder";
+  return type;
+}
+
+export function evaluateGuardrail(state, txn, diagnosis, rawActionType, extras = {}) {
+  const actionType = normalizeActionType(rawActionType);
   const checks = [];
   const block = (title, detail) => checks.push({ id: title.toLowerCase().replace(/\s+/g, "_"), title, outcome: "block", detail });
   const hold = (title, detail) => checks.push({ id: title.toLowerCase().replace(/\s+/g, "_"), title, outcome: "hold", detail });
   const pass = (title, detail) => checks.push({ id: title.toLowerCase().replace(/\s+/g, "_"), title, outcome: "pass", detail });
 
-  if (!ACTION_TYPES.includes(actionType) || CHARGE_TYPES.has(actionType)) {
-    block("Allowed actions only", `${actionType || "empty"} is not an action this agent is allowed to run.`);
+  if (!ACTION_TYPES.includes(actionType) && !ACTION_TYPES.includes(rawActionType) || CHARGE_TYPES.has(actionType)) {
+    block("Allowed actions only", `${rawActionType || "empty"} is not an action this agent is allowed to run.`);
   } else {
     pass("Allowed actions only", `${labelFor(actionType)} is on the recovery whitelist.`);
   }
@@ -88,18 +100,23 @@ export function evaluateGuardrail(state, txn, diagnosis, actionType, extras = {}
     requiresApproval: !blocked && held,
     checks,
     idempotencyKey: key,
+    actionType,
   };
 }
 
 export function labelFor(type) {
   return {
     generate_invoice: "Generate invoice",
-    send_recovery_message: "Send recovery message",
+    invoice: "Generate invoice",
+    send_recovery_message: "Recovery message",
+    recovery_message: "Recovery message",
+    message: "Recovery message",
     schedule_retry: "Schedule retry",
     send_reminder: "Send reminder",
+    reminder: "Send reminder",
     escalate_human: "Escalate to human",
     recommend_capture: "Recommend capture",
-  }[type] || type;
+  }[type] || String(type).replace(/_/g, " ");
 }
 
 export function reviewReason(txn, diagnosis, decision) {

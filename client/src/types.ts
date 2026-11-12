@@ -181,10 +181,13 @@ export interface Settings {
 }
 
 export interface IntegrationFlags {
+  gemini?: boolean;
   openai: boolean;
-  model: string;
+  paypal?: boolean;
   paypalSandbox: boolean;
+  model: string;
   webhookVerified: boolean;
+  paypalMode?: string;
 }
 
 export interface CurrentUser {

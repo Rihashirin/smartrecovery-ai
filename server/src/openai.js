@@ -42,11 +42,16 @@ export async function narrateWithOpenAI(input) {
 }
 
 export function integrationFlags() {
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY);
+  const hasOpenai = Boolean(process.env.OPENAI_API_KEY);
+  const hasPaypal = Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
   return {
-    openai: Boolean(process.env.OPENAI_API_KEY),
-    paypal: Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET),
-    webhookVerification: Boolean(process.env.PAYPAL_WEBHOOK_ID),
-    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-    paypalMode: process.env.PAYPAL_MODE || "sandbox",
+    gemini: hasGemini,
+    openai: hasOpenai,
+    paypal: hasPaypal,
+    paypalSandbox: hasPaypal,
+    webhookVerified: Boolean(process.env.PAYPAL_WEBHOOK_ID),
+    model: hasGemini ? "Gemini 1.5 Flash" : hasOpenai ? (process.env.OPENAI_MODEL || "gpt-4o-mini") : "Policy Engine",
+    paypalMode: process.env.PAYPAL_MODE || (hasPaypal ? "sandbox" : "simulated"),
   };
 }
