@@ -129,6 +129,23 @@ app.post("/api/demo/reset", wrap(async (_req, res) => {
   res.json(buildView(state, { tone: "success", message: "Demo ledger restored." }));
 }));
 
+app.get("/api/webhooks/paypal", (_req, res) => {
+  res.json({
+    ok: true,
+    service: "SmartRecovery AI",
+    endpoint: "PayPal Webhook Listener",
+    status: "Active & Listening",
+    method: "POST",
+    supportedEvents: [
+      "PAYMENT.CAPTURE.DENIED",
+      "BILLING.SUBSCRIPTION.PAYMENT.FAILED",
+      "CHECKOUT.ORDER.APPROVED",
+      "PAYMENT.CAPTURE.REFUNDED",
+      "PAYMENT.CAPTURE.COMPLETED",
+    ],
+  });
+});
+
 app.post("/api/webhooks/paypal", wrap(async (req, res) => {
   const state = load();
   const result = await handleWebhook(state, req.body || {}, req.headers);
